@@ -23,11 +23,20 @@ The proof of concept will be an example for how gameplay should look when we imp
 
 Technical test
 
-- [ ] Add basic stuff to CLAUDE.md regarding development using the frameworks choosen
-- [ ] Create the base project with typescript and import libraries that are needed for physics and graphics
-- [ ] Setup a gitignore file
-- [ ] Create a blank canvas that the game will use to draw
-- [ ] Set up a main gameplay loop
-- [ ] Create the cell out of 100 vertices
-- [ ] Add simple movement controls, listening to the arrow keys
-- [ ] Implement movement to push or drag the cell
+- [X] Add basic stuff to CLAUDE.md regarding development using the frameworks choosen
+- [X] Create the base project with typescript and import libraries that are needed for physics and graphics
+- [X] Setup a gitignore file
+- [X] Create a blank canvas that the game will use to draw
+- [X] Set up a main gameplay loop
+- [X] Create the cell out of 100 vertices
+- [X] Add simple movement controls, listening to the arrow keys
+- [X] Implement movement to push or drag the cell
+  
+## Step 2
+
+Joining two cells. We should have two cells created that are joined by an intermediate rectangle shaped entity (it could also be consisting of multiple vertices to get a organic shape but with 4 corner vertices that creates a 90 degree angle and straight connections between other vertices.)
+
+Each long side of the rectangle connects to the a corresponding set of vertices on each cell. The connector should be blue.
+
+- [ ] Think about how to implement this based on the current implementation and if we need to change the base assumption of how we do this.
+- [ ] Implement it and keep the movement code as is on the first existing cell.

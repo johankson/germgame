@@ -5,12 +5,16 @@ const EDGE_STIFFNESS = 0.3   // perimeter spring strength
 const RADIAL_STIFFNESS = 0.1 // pull toward ring radius from center
 const DAMPING = 0.04         // velocity decay per frame (liquid drag)
 const MOVE_FORCE = 0.5       // velocity impulse applied to leading-edge vertices
+const ANGULAR_DAMPING = 0.015 // rotational velocity decay — lower than DAMPING so spin persists
+const SMOOTH_RADIUS = 6      // box-filter half-width used in rendering
 
 interface Vec2 { x: number; y: number }
 
 export class Cell {
   private positions: Vec2[]
   private velocities: Vec2[]
+  private pendingExternalForces: Vec2[]
+  private angularVelocity = 0
   private graphics: PIXI.Graphics
   private readonly vertexCount: number
   private readonly restEdgeLength: number
@@ -20,6 +24,7 @@ export class Cell {
     this.restEdgeLength = (2 * Math.PI * RING_RADIUS) / vertexCount
     this.positions = []
     this.velocities = []
+    this.pendingExternalForces = []
 
     for (let i = 0; i < vertexCount; i++) {
       const angle = (i / vertexCount) * Math.PI * 2
@@ -28,10 +33,53 @@ export class Cell {
         y: cy + Math.sin(angle) * RING_RADIUS,
       })
       this.velocities.push({ x: 0, y: 0 })
+      this.pendingExternalForces.push({ x: 0, y: 0 })
     }
 
     this.graphics = new PIXI.Graphics()
     stage.addChild(this.graphics)
+  }
+
+  getVertexCount(): number { return this.vertexCount }
+
+  getVertexPosition(i: number): Vec2 {
+    return { x: this.positions[i].x, y: this.positions[i].y }
+  }
+
+  // Same box filter used in draw() — lets joined geometry agree on one render position.
+  getSmoothedVertexPosition(i: number): Vec2 {
+    const n = this.vertexCount
+    let x = 0, y = 0
+    for (let k = -SMOOTH_RADIUS; k <= SMOOTH_RADIUS; k++) {
+      const j = (i + k + n) % n
+      x += this.positions[j].x
+      y += this.positions[j].y
+    }
+    return { x: x / (2 * SMOOTH_RADIUS + 1), y: y / (2 * SMOOTH_RADIUS + 1) }
+  }
+
+  applyExternalForce(i: number, fx: number, fy: number): void {
+    this.pendingExternalForces[i].x += fx
+    this.pendingExternalForces[i].y += fy
+  }
+
+  getCenterVelocity(): Vec2 {
+    let vx = 0, vy = 0
+    for (const v of this.velocities) {
+      vx += v.x
+      vy += v.y
+    }
+    return { x: vx / this.vertexCount, y: vy / this.vertexCount }
+  }
+
+  getCenter(): Vec2 {
+    let x = 0
+    let y = 0
+    for (const p of this.positions) {
+      x += p.x
+      y += p.y
+    }
+    return { x: x / this.vertexCount, y: y / this.vertexCount }
   }
 
   applyMovement(dir: Vec2) {
@@ -54,6 +102,14 @@ export class Cell {
   private step() {
     const center = this.getCenter()
     const forces: Vec2[] = Array.from({ length: this.vertexCount }, () => ({ x: 0, y: 0 }))
+
+    // Consume external forces injected by Connector this frame
+    for (let i = 0; i < this.vertexCount; i++) {
+      forces[i].x += this.pendingExternalForces[i].x
+      forces[i].y += this.pendingExternalForces[i].y
+      this.pendingExternalForces[i].x = 0
+      this.pendingExternalForces[i].y = 0
+    }
 
     // Edge springs — keep adjacent vertices at rest arc length
     for (let i = 0; i < this.vertexCount; i++) {
@@ -82,12 +138,27 @@ export class Cell {
       forces[i].y -= (dy / dist) * stretch * RADIAL_STIFFNESS
     }
 
-    // Integrate: apply forces, damp, move
+    // Angular momentum: accumulate torque (r × F) and moment of inertia (Σ r²),
+    // then integrate angular velocity separately from linear velocity so each
+    // can damp at its own rate.
+    let torque = 0
+    let inertia = 0
+    for (let i = 0; i < this.vertexCount; i++) {
+      const rx = this.positions[i].x - center.x
+      const ry = this.positions[i].y - center.y
+      torque += rx * forces[i].y - ry * forces[i].x
+      inertia += rx * rx + ry * ry
+    }
+    this.angularVelocity = (this.angularVelocity + torque / (inertia || 1)) * (1 - ANGULAR_DAMPING)
+
+    // Integrate: linear velocity + angular tangential contribution → new position
     for (let i = 0; i < this.vertexCount; i++) {
       this.velocities[i].x = (this.velocities[i].x + forces[i].x) * (1 - DAMPING)
       this.velocities[i].y = (this.velocities[i].y + forces[i].y) * (1 - DAMPING)
-      this.positions[i].x += this.velocities[i].x
-      this.positions[i].y += this.velocities[i].y
+      const rx = this.positions[i].x - center.x
+      const ry = this.positions[i].y - center.y
+      this.positions[i].x += this.velocities[i].x - ry * this.angularVelocity
+      this.positions[i].y += this.velocities[i].y + rx * this.angularVelocity
     }
 
     // Post-physics correction: fix any crossings by checking the cross product
@@ -125,25 +196,26 @@ export class Cell {
     const g = this.graphics
     g.clear()
 
+    // Smooth rendered positions with a box filter over neighbours.
+    // Physics positions are unchanged — this is purely a visual trick.
+    const n = this.vertexCount
+    const r = SMOOTH_RADIUS
     const points: number[] = []
-    for (const p of this.positions) {
-      points.push(p.x, p.y)
+    for (let i = 0; i < n; i++) {
+      let x = 0, y = 0
+      for (let k = -r; k <= r; k++) {
+        const j = (i + k + n) % n
+        x += this.positions[j].x
+        y += this.positions[j].y
+      }
+      points.push(x / (2 * r + 1), y / (2 * r + 1))
     }
 
-    g.setStrokeStyle({ width: 2, color: 0xcc0000 })
-    g.setFillStyle({ color: 0xff4444, alpha: 0.6 })
+    g.setStrokeStyle({ width: 2, color: 0x00cc44 })
+    g.setFillStyle({ color: 0x44ff88, alpha: 0.6 })
     g.poly(points, true)
     g.fill()
     g.stroke()
   }
 
-  private getCenter(): Vec2 {
-    let x = 0
-    let y = 0
-    for (const p of this.positions) {
-      x += p.x
-      y += p.y
-    }
-    return { x: x / this.vertexCount, y: y / this.vertexCount }
-  }
 }
