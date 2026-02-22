@@ -220,13 +220,21 @@ export class Cell {
       points.push(x / (2 * r + 1), y / (2 * r + 1))
     }
 
-    const fill   = this.hovered ? 0x88ffaa : 0x44ff88
-    const stroke = this.hovered ? 0xffffff : 0x00cc44
-    const alpha  = this.hovered ? 0.85 : 0.6
+    // Cell body — translucent cytoplasm + membrane ring
+    const fill   = this.hovered ? 0x2aaa88 : 0x1e8060
+    const stroke = this.hovered ? 0x88ffcc : 0x45e8a0
+    const alpha  = this.hovered ? 0.45 : 0.28
 
     g.setStrokeStyle({ width: this.hovered ? 3 : 2, color: stroke })
     g.setFillStyle({ color: fill, alpha })
     g.poly(points, true)
+    g.fill()
+    g.stroke()
+
+    // Nucleus — small dark circle at center with a glowing ring
+    g.setFillStyle({ color: 0x0a3d2c, alpha: 0.75 })
+    g.setStrokeStyle({ width: 1.5, color: 0x45e8a0, alpha: 0.45 })
+    g.circle(center.x, center.y, RING_RADIUS * 0.28)
     g.fill()
     g.stroke()
   }

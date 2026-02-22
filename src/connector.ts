@@ -125,6 +125,17 @@ export class Connector {
     this.springs.push({ a, b, restLen, stiffness })
   }
 
+  // Midpoint of cell1's connector interface — use as the line endpoint for internal connections
+  getCell1AttachPoint(cell1: Cell): Vec2 {
+    let x = 0, y = 0
+    for (const idx of this.cell1AllIndices) {
+      const p = cell1.getSmoothedVertexPosition(idx)
+      x += p.x
+      y += p.y
+    }
+    return { x: x / this.cell1AllIndices.length, y: y / this.cell1AllIndices.length }
+  }
+
   update(cell1: Cell, cell2: Cell) {
     this.step(cell1, cell2)
     this.draw(cell1, cell2)
@@ -219,16 +230,48 @@ export class Connector {
       points.push(p.x + ax * EXTEND, p.y + ay * EXTEND)
     }
 
-    const fill   = this.hovered ? 0x88ccff : 0x4488ff
-    const stroke = this.hovered ? 0xffffff : 0x0066cc
-    const alpha  = this.hovered ? 0.9 : 0.6
+    // Membrane junction — warm amber, like a plasmodesmata bridge
+    const fill   = this.hovered ? 0xe8a050 : 0xc47820
+    const stroke = this.hovered ? 0xffffff : 0xf0b050
+    const alpha  = this.hovered ? 0.92 : 0.72
 
     g.setStrokeStyle({ width: this.hovered ? 3 : 2, color: stroke })
     g.setFillStyle({ color: fill, alpha })
-    g.poly(points, true)
+    roundedPoly(g, points, 10)
     g.fill()
     g.stroke()
   }
+}
+
+// Draws a closed polygon with rounded corners.
+// At each vertex, retreats r px along the incoming edge, curves through the vertex
+// as a quadratic bezier control point, and arrives r px along the outgoing edge.
+// Where edges are shorter than 2r the radius is clamped automatically.
+function roundedPoly(g: PIXI.Graphics, pts: number[], radius: number) {
+  const n = pts.length / 2
+  for (let i = 0; i < n; i++) {
+    const pi = i * 2
+    const pp = (((i - 1) % n) + n) % n * 2
+    const pn = ((i + 1) % n) * 2
+
+    const cx = pts[pi],     cy = pts[pi + 1]
+    const px = pts[pp],     py = pts[pp + 1]
+    const nx = pts[pn],     ny = pts[pn + 1]
+
+    const d1x = cx - px,   d1y = cy - py
+    const d2x = nx - cx,   d2y = ny - cy
+    const len1 = Math.sqrt(d1x * d1x + d1y * d1y) || 1
+    const len2 = Math.sqrt(d2x * d2x + d2y * d2y) || 1
+    const r = Math.min(radius, len1 / 2, len2 / 2)
+
+    const a1x = cx - (d1x / len1) * r,  a1y = cy - (d1y / len1) * r
+    const a2x = cx + (d2x / len2) * r,  a2y = cy + (d2y / len2) * r
+
+    if (i === 0) g.moveTo(a1x, a1y)
+    else         g.lineTo(a1x, a1y)
+    g.quadraticCurveTo(cx, cy, a2x, a2y)
+  }
+  g.closePath()
 }
 
 // Returns n vertex indices on `cell` most facing `direction`, sorted top-to-bottom by y.

@@ -1,6 +1,7 @@
 import { Application } from 'pixi.js'
 import { Cell } from './cell'
 import { Connector } from './connector'
+import { Factory } from './factory'
 import { Input } from './input'
 
 export function createGame(app: Application) {
@@ -16,7 +17,9 @@ export function createGame(app: Application) {
   const cell1 = new Cell(app.stage, cx - 105, cy, vertexCount)
   const cell2 = new Cell(app.stage, cx + 105, cy, vertexCount)
 
-  const connector = new Connector(app.stage, cell1, cell2)
+  const connector       = new Connector(app.stage, cell1, cell2)
+  const triangleFactory = new Factory(app.stage, 'triangle', 0xff5533,  1)  // mitochondria-red
+  const squareFactory   = new Factory(app.stage, 'square',   0x44aaff, -1)  // ribosome-blue
 
   const input = new Input()
 
@@ -55,5 +58,12 @@ export function createGame(app: Application) {
     connector.update(cell1, cell2)
     cell1.update()
     cell2.update()
+
+    // Factories: drawn last so they sit on top of everything.
+    // Offset vertically inside cell1 so they don't overlap.
+    const cellCenter  = cell1.getCenter()
+    const attachPoint = connector.getCell1AttachPoint(cell1)
+    triangleFactory.update({ x: cellCenter.x, y: cellCenter.y - 20 }, attachPoint)
+    squareFactory.update(  { x: cellCenter.x, y: cellCenter.y + 20 }, attachPoint)
   })
 }
