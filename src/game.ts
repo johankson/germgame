@@ -1,36 +1,54 @@
-import { Application } from 'pixi.js'
+import { Application, Container } from 'pixi.js'
 import { Cell } from './cell'
 import { Connector } from './connector'
 import { Factory } from './factory'
+import { Hud } from './hud'
 import { Input } from './input'
+
+const CAMERA_ACCEL    = 1.0   // px/frame added each frame while key held
+const CAMERA_FRICTION = 0.90  // velocity multiplier per frame — controls deceleration feel
 
 export function createGame(app: Application) {
   const params = new URLSearchParams(window.location.search)
   const vertexCount = Math.max(8, parseInt(params.get('v') ?? '96', 10))
 
-  const cx = app.screen.width / 2
-  const cy = app.screen.height / 2
+  // World container: all game entities live here.
+  // Panning this container is the camera.
+  const worldContainer = new Container()
+  app.stage.addChild(worldContainer)
 
-  // Cells sit close together so the connector gap is ~25% of the connector height.
-  // With RING_RADIUS=100 and N≈3, connector height ≈ 39px; gap = height/4 ≈ 10px.
-  // d = RING_RADIUS + gap/2 = 100 + 5 = 105.
-  const cell1 = new Cell(app.stage, cx - 105, cy, vertexCount)
-  const cell2 = new Cell(app.stage, cx + 105, cy, vertexCount)
+  // HUD container: fixed to screen, drawn on top of the world.
+  const hudContainer = new Container()
+  app.stage.addChild(hudContainer)
 
-  const connector       = new Connector(app.stage, cell1, cell2)
-  const triangleFactory = new Factory(app.stage, 'triangle', 0xff5533,  1)  // mitochondria-red
-  const squareFactory   = new Factory(app.stage, 'square',   0x44aaff, -1)  // ribosome-blue
+  // Cells spawn at world origin — the camera starts centred there.
+  const cell1 = new Cell(worldContainer, -105, 0, vertexCount)
+  const cell2 = new Cell(worldContainer,  105, 0, vertexCount)
 
+  const connector       = new Connector(worldContainer, cell1, cell2)
+  const triangleFactory = new Factory(worldContainer, 'triangle', 0xff5533,  1)
+  const squareFactory   = new Factory(worldContainer, 'square',   0x44aaff, -1)
+
+  const hud   = new Hud(hudContainer)
   const input = new Input()
 
-  app.ticker.add(() => {
-    const dir = input.direction()
-    if (dir.x !== 0 || dir.y !== 0) {
-      cell1.applyMovement(dir)
-    }
+  // Camera state: world-space position the camera is looking at.
+  const cameraPos = { x: 0, y: 0 }
+  const cameraVel = { x: 0, y: 0 }
 
-    // Soft repulsion: push cells apart when centers are closer than 2×RING_RADIUS.
-    // Uses a spring-damper so the force settles instead of oscillating.
+  app.ticker.add(() => {
+    // Arrow keys accelerate the camera; friction decelerates it when released.
+    const dir = input.direction()
+    cameraVel.x = (cameraVel.x + dir.x * CAMERA_ACCEL) * CAMERA_FRICTION
+    cameraVel.y = (cameraVel.y + dir.y * CAMERA_ACCEL) * CAMERA_FRICTION
+    cameraPos.x += cameraVel.x
+    cameraPos.y += cameraVel.y
+
+    // Shift the world container so cameraPos sits at the screen centre.
+    worldContainer.x = app.screen.width  / 2 - cameraPos.x
+    worldContainer.y = app.screen.height / 2 - cameraPos.y
+
+    // Soft repulsion: push cells apart when centres are closer than 2×RING_RADIUS.
     const c1 = cell1.getCenter()
     const c2 = cell2.getCenter()
     const dx = c2.x - c1.x
@@ -39,9 +57,7 @@ export function createGame(app: Application) {
     if (dist < 200) {
       const nx = dx / dist
       const ny = dy / dist
-      // Spring: proportional to overlap
       const springF = (200 - dist) * 0.2
-      // Damper: oppose relative approach velocity along the collision normal
       const v1 = cell1.getCenterVelocity()
       const v2 = cell2.getCenterVelocity()
       const approachSpeed = (v1.x - v2.x) * nx + (v1.y - v2.y) * ny
@@ -54,16 +70,22 @@ export function createGame(app: Application) {
       }
     }
 
-    // Connector runs first: injects attachment forces into cells before they integrate
+    // Connector runs first: injects attachment forces into cells before they integrate.
     connector.update(cell1, cell2)
     cell1.update()
     cell2.update()
 
     // Factories: drawn last so they sit on top of everything.
-    // Offset vertically inside cell1 so they don't overlap.
     const cellCenter  = cell1.getCenter()
     const attachPoint = connector.getCell1AttachPoint(cell1)
     triangleFactory.update({ x: cellCenter.x, y: cellCenter.y - 20 }, attachPoint)
     squareFactory.update(  { x: cellCenter.x, y: cellCenter.y + 20 }, attachPoint)
+
+    // Off-screen indicator: show arrow + distance when the cluster is out of view.
+    const clusterPos = {
+      x: (cell1.getCenter().x + cell2.getCenter().x) / 2,
+      y: (cell1.getCenter().y + cell2.getCenter().y) / 2,
+    }
+    hud.update(clusterPos, cameraPos, app.screen.width, app.screen.height)
   })
 }

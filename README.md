@@ -38,5 +38,9 @@ Joining two cells. We should have two cells created that are joined by an interm
 
 Each long side of the rectangle connects to the a corresponding set of vertices on each cell. The connector should be blue.
 
-- [ ] Think about how to implement this based on the current implementation and if we need to change the base assumption of how we do this.
-- [ ] Implement it and keep the movement code as is on the first existing cell.
+- [x] Think about how to implement this based on the current implementation and if we need to change the base assumption of how we do this.
+- [x] Implement it and keep the movement code as is on the first existing cell.
+
+## Step 3
+
+We need to create a game world for our cells. The arrow keys will now move the "player" instead of the cells. If the player pans out of view of the cells an arrow should appear to point in the direction of the cell cluster and display the distance to it. The cells them self should not move unless acted on by an external force.

@@ -4,8 +4,7 @@ import { createGame } from './game'
 ;(async () => {
   const app = new Application()
   await app.init({
-    width: 800,
-    height: 600,
+    resizeTo: window,
     backgroundColor: 0x0a1628,
   })
 

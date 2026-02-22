@@ -14,6 +14,7 @@ export class Cell {
   private positions: Vec2[]
   private velocities: Vec2[]
   private pendingExternalForces: Vec2[]
+  private readonly restRadii: number[]
   private angularVelocity = 0
   private hovered = false
   private graphics: PIXI.Graphics
@@ -26,6 +27,21 @@ export class Cell {
     this.positions = []
     this.velocities = []
     this.pendingExternalForces = []
+
+    // Smooth random rest radii — sum of a few sine harmonics with random phases
+    // and amplitudes so neighbouring vertices are correlated (no jagged spikes).
+    const numModes = 5
+    const phases = Array.from({ length: numModes }, () => Math.random() * Math.PI * 2)
+    const amps   = Array.from({ length: numModes }, (_, k) => RING_RADIUS * (0.06 - k * 0.008))
+    this.restRadii = []
+    for (let i = 0; i < vertexCount; i++) {
+      const angle = (i / vertexCount) * Math.PI * 2
+      let r = RING_RADIUS
+      for (let k = 0; k < numModes; k++) {
+        r += Math.sin(angle * (k + 2) + phases[k]) * amps[k]
+      }
+      this.restRadii.push(r)
+    }
 
     for (let i = 0; i < vertexCount; i++) {
       const angle = (i / vertexCount) * Math.PI * 2
@@ -138,7 +154,7 @@ export class Cell {
       const dx = this.positions[i].x - center.x
       const dy = this.positions[i].y - center.y
       const dist = Math.sqrt(dx * dx + dy * dy) || 0.001
-      const stretch = dist - RING_RADIUS
+      const stretch = dist - this.restRadii[i]
       forces[i].x -= (dx / dist) * stretch * RADIAL_STIFFNESS
       forces[i].y -= (dy / dist) * stretch * RADIAL_STIFFNESS
     }
