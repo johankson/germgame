@@ -26,6 +26,7 @@ export class Connector {
   private cell1AllIndices: number[]       // all N indices, top→bottom — rendering
   private cell2AllIndices: number[]
   private graphics: PIXI.Graphics
+  private hovered = false
 
   constructor(stage: PIXI.Container, cell1: Cell, cell2: Cell) {
     // Connector height H = 2R·sin(π·(N-1)/vc). Target H ≈ 0.5R (25% of diameter).
@@ -64,8 +65,12 @@ export class Connector {
     this.buildSprings()
 
     this.graphics = new PIXI.Graphics()
-    // Insert at index 0 so cells render on top, hiding the chord-vs-arc overlap
-    stage.addChildAt(this.graphics, 0)
+    // Render on top of cells so the connector is always visible and clickable
+    stage.addChild(this.graphics)
+
+    this.graphics.eventMode = 'static'
+    this.graphics.on('pointerenter', () => { this.hovered = true })
+    this.graphics.on('pointerleave', () => { this.hovered = false })
   }
 
   // Straight-line spacing between column endpoints divided equally over n-1 gaps.
@@ -186,20 +191,40 @@ export class Connector {
     const g = this.graphics
     g.clear()
 
-    // Left/right edges use the same smoothed positions the cell renders with,
-    // so the connector and cell surfaces always agree at the join.
+    // Axis vector pointing from cell1 toward cell2 (normalised)
+    const c1 = cell1.getCenter()
+    const c2 = cell2.getCenter()
+    const adx = c2.x - c1.x
+    const ady = c2.y - c1.y
+    const alen = Math.sqrt(adx * adx + ady * ady) || 1
+    const ax = adx / alen
+    const ay = ady / alen
+
+    // Hit area: circle at connector midpoint — updated every frame as cells move
+    const midX = (c1.x + c2.x) / 2
+    const midY = (c1.y + c2.y) / 2
+    this.graphics.hitArea = new PIXI.Circle(midX, midY, 28)
+
+    // Extend each edge EXTEND px into its own cell along the connector axis,
+    // so the connector visibly overlaps the cell surfaces and is always clickable.
+    const EXTEND = 8
+
     const points: number[] = []
     for (const idx of this.cell1AllIndices) {
       const p = cell1.getSmoothedVertexPosition(idx)
-      points.push(p.x, p.y)
+      points.push(p.x - ax * EXTEND, p.y - ay * EXTEND)
     }
     for (let i = this.cell2AllIndices.length - 1; i >= 0; i--) {
       const p = cell2.getSmoothedVertexPosition(this.cell2AllIndices[i])
-      points.push(p.x, p.y)
+      points.push(p.x + ax * EXTEND, p.y + ay * EXTEND)
     }
 
-    g.setStrokeStyle({ width: 2, color: 0x0066cc })
-    g.setFillStyle({ color: 0x4488ff, alpha: 0.6 })
+    const fill   = this.hovered ? 0x88ccff : 0x4488ff
+    const stroke = this.hovered ? 0xffffff : 0x0066cc
+    const alpha  = this.hovered ? 0.9 : 0.6
+
+    g.setStrokeStyle({ width: this.hovered ? 3 : 2, color: stroke })
+    g.setFillStyle({ color: fill, alpha })
     g.poly(points, true)
     g.fill()
     g.stroke()

@@ -15,6 +15,7 @@ export class Cell {
   private velocities: Vec2[]
   private pendingExternalForces: Vec2[]
   private angularVelocity = 0
+  private hovered = false
   private graphics: PIXI.Graphics
   private readonly vertexCount: number
   private readonly restEdgeLength: number
@@ -38,6 +39,10 @@ export class Cell {
 
     this.graphics = new PIXI.Graphics()
     stage.addChild(this.graphics)
+
+    this.graphics.eventMode = 'static'
+    this.graphics.on('pointerenter', () => { this.hovered = true })
+    this.graphics.on('pointerleave', () => { this.hovered = false })
   }
 
   getVertexCount(): number { return this.vertexCount }
@@ -196,6 +201,10 @@ export class Cell {
     const g = this.graphics
     g.clear()
 
+    // Hit area: circle at cell center, updated every frame as the cell moves
+    const center = this.getCenter()
+    this.graphics.hitArea = new PIXI.Circle(center.x, center.y, RING_RADIUS)
+
     // Smooth rendered positions with a box filter over neighbours.
     // Physics positions are unchanged — this is purely a visual trick.
     const n = this.vertexCount
@@ -211,8 +220,12 @@ export class Cell {
       points.push(x / (2 * r + 1), y / (2 * r + 1))
     }
 
-    g.setStrokeStyle({ width: 2, color: 0x00cc44 })
-    g.setFillStyle({ color: 0x44ff88, alpha: 0.6 })
+    const fill   = this.hovered ? 0x88ffaa : 0x44ff88
+    const stroke = this.hovered ? 0xffffff : 0x00cc44
+    const alpha  = this.hovered ? 0.85 : 0.6
+
+    g.setStrokeStyle({ width: this.hovered ? 3 : 2, color: stroke })
+    g.setFillStyle({ color: fill, alpha })
     g.poly(points, true)
     g.fill()
     g.stroke()
