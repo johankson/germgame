@@ -30,6 +30,11 @@ export class Receptor {
     this.vertexIdx = best
   }
 
+  /** Returns the world position of the receptor's membrane vertex on the given cell. */
+  getVertexPosition(cell: Cell): { x: number; y: number } {
+    return cell.getSmoothedVertexPosition(this.vertexIdx)
+  }
+
   update(cell: Cell, pool: NutrientPool): void {
     this.frameCount++
     const receptorPos = cell.getSmoothedVertexPosition(this.vertexIdx)
@@ -99,5 +104,8 @@ export class Receptor {
     ], true)
     g.fill()
     g.stroke()
+  }
+  destroy(): void {
+    this.graphics.destroy()
   }
 }
