@@ -165,6 +165,28 @@ export function createGame(app: Application) {
     worldContainer.x = app.screen.width  / 2 - cameraPos.x
     worldContainer.y = app.screen.height / 2 - cameraPos.y
 
+    // Connector attraction: pull linked cells together when they stretch beyond the rest gap.
+    // Mirrors the repulsion loop below — same pattern, opposite sign.
+    const LINK_K    = 0.3   // spring stiffness
+    const LINK_REST = 220   // px centre-to-centre — natural resting gap
+    for (const { a, b } of connectors) {
+      const ca = a.getCenter()
+      const cb = b.getCenter()
+      const dx = cb.x - ca.x
+      const dy = cb.y - ca.y
+      const dist = Math.sqrt(dx * dx + dy * dy) || 0.001
+      if (dist > LINK_REST) {
+        const nx = dx / dist
+        const ny = dy / dist
+        const f  = (dist - LINK_REST) * LINK_K
+        const vc = a.getVertexCount()
+        for (let i = 0; i < vc; i++) {
+          a.applyExternalForce(i,  nx * f / vc,  ny * f / vc)
+          b.applyExternalForce(i, -nx * f / vc, -ny * f / vc)
+        }
+      }
+    }
+
     // Soft repulsion: push all cell pairs apart when centres are closer than 2×RING_RADIUS.
     for (let ci = 0; ci < cells.length; ci++) {
       for (let cj = ci + 1; cj < cells.length; cj++) {
