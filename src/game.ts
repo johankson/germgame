@@ -158,25 +158,31 @@ export function createGame(app: Application) {
     worldContainer.x = app.screen.width  / 2 - cameraPos.x
     worldContainer.y = app.screen.height / 2 - cameraPos.y
 
-    // Soft repulsion: push cells apart when centres are closer than 2×RING_RADIUS.
-    const c1 = cell1.getCenter()
-    const c2 = cell2.getCenter()
-    const dx = c2.x - c1.x
-    const dy = c2.y - c1.y
-    const dist = Math.sqrt(dx * dx + dy * dy) || 0.001
-    if (dist < 200) {
-      const nx = dx / dist
-      const ny = dy / dist
-      const springF = (200 - dist) * 0.2
-      const v1 = cell1.getCenterVelocity()
-      const v2 = cell2.getCenterVelocity()
-      const approachSpeed = (v1.x - v2.x) * nx + (v1.y - v2.y) * ny
-      const dampF = approachSpeed * 0.5
-      const f = springF + dampF
-      const vc = cell1.getVertexCount()
-      for (let i = 0; i < vc; i++) {
-        cell1.applyExternalForce(i, -nx * f / vc, -ny * f / vc)
-        cell2.applyExternalForce(i,  nx * f / vc,  ny * f / vc)
+    // Soft repulsion: push all cell pairs apart when centres are closer than 2×RING_RADIUS.
+    for (let ci = 0; ci < cells.length; ci++) {
+      for (let cj = ci + 1; cj < cells.length; cj++) {
+        const ca = cells[ci]
+        const cb = cells[cj]
+        const ca_center = ca.getCenter()
+        const cb_center = cb.getCenter()
+        const dx = cb_center.x - ca_center.x
+        const dy = cb_center.y - ca_center.y
+        const dist = Math.sqrt(dx * dx + dy * dy) || 0.001
+        if (dist < 200) {
+          const nx = dx / dist
+          const ny = dy / dist
+          const springF = (200 - dist) * 0.2
+          const va = ca.getCenterVelocity()
+          const vb = cb.getCenterVelocity()
+          const approachSpeed = (va.x - vb.x) * nx + (va.y - vb.y) * ny
+          const dampF = approachSpeed * 0.5
+          const f = springF + dampF
+          const vc = ca.getVertexCount()
+          for (let i = 0; i < vc; i++) {
+            ca.applyExternalForce(i, -nx * f / vc, -ny * f / vc)
+            cb.applyExternalForce(i,  nx * f / vc,  ny * f / vc)
+          }
+        }
       }
     }
 
@@ -193,7 +199,7 @@ export function createGame(app: Application) {
     receptor.update(receptorOwner, nutrientPool)
 
     // Nutrient physics + respawn + draw — runs last so receptor ingestion is applied first.
-    nutrientPool.update(cell1)
+    nutrientPool.update(cells)
 
     // Mouse in world space
     const mouseWorld = {

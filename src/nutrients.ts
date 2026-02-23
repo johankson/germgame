@@ -40,7 +40,7 @@ export class NutrientPool {
     })
   }
 
-  update(cell: Cell): void {
+  update(cells: Cell[]): void {
     for (const p of this.particles) {
       if (p.state === 'world') {
         // Gentle brownian drift
@@ -49,18 +49,23 @@ export class NutrientPool {
         const spd = Math.sqrt(p.vx * p.vx + p.vy * p.vy)
         if (spd > SPEED_CAP_WORLD) { p.vx = p.vx / spd * SPEED_CAP_WORLD; p.vy = p.vy / spd * SPEED_CAP_WORLD }
 
-        // Bounce off the cell wall — world nutrients cannot pass through the membrane.
-        if (cell.containsPoint({ x: p.x, y: p.y })) {
-          const c = cell.getCenter()
-          const dx = p.x - c.x
-          const dy = p.y - c.y
-          const len = Math.sqrt(dx * dx + dy * dy) || 1
-          p.vx = (dx / len) * 0.5
-          p.vy = (dy / len) * 0.5
-          p.x += p.vx * 5
-          p.y += p.vy * 5
-          continue
+        // Bounce off any cell wall — world nutrients cannot pass through any membrane.
+        let bounced = false
+        for (const c of cells) {
+          if (c.containsPoint({ x: p.x, y: p.y })) {
+            const center = c.getCenter()
+            const dx = p.x - center.x
+            const dy = p.y - center.y
+            const len = Math.sqrt(dx * dx + dy * dy) || 1
+            p.vx = (dx / len) * 0.5
+            p.vy = (dy / len) * 0.5
+            p.x += p.vx * 5
+            p.y += p.vy * 5
+            bounced = true
+            break
+          }
         }
+        if (bounced) continue
       } else {
         // Inside cell: more agitated brownian, bounce off membrane
         p.vx += (Math.random() - 0.5) * 0.10
@@ -68,12 +73,23 @@ export class NutrientPool {
         const spd = Math.sqrt(p.vx * p.vx + p.vy * p.vy)
         if (spd > SPEED_CAP_INSIDE) { p.vx = p.vx / spd * SPEED_CAP_INSIDE; p.vy = p.vy / spd * SPEED_CAP_INSIDE }
 
-        if (!cell.containsPoint({ x: p.x, y: p.y })) {
-          const c = cell.getCenter()
-          const dx = c.x - p.x
-          const dy = c.y - p.y
+        // Find nearest cell center to bounce toward if outside all cells
+        const insideAny = cells.some(c => c.containsPoint({ x: p.x, y: p.y }))
+        if (!insideAny) {
+          let nearest = cells[0]
+          let nearestDist = Infinity
+          for (const c of cells) {
+            const center = c.getCenter()
+            const ddx = center.x - p.x
+            const ddy = center.y - p.y
+            const d = Math.sqrt(ddx * ddx + ddy * ddy)
+            if (d < nearestDist) { nearestDist = d; nearest = c }
+          }
+          const center = nearest.getCenter()
+          const dx = center.x - p.x
+          const dy = center.y - p.y
           const len = Math.sqrt(dx * dx + dy * dy) || 1
-          // Redirect velocity toward center and nudge back inside in one step.
+          // Redirect velocity toward nearest cell center and nudge back inside in one step.
           // `continue` skips the unconditional integration below to avoid double-counting.
           p.vx = (dx / len) * 0.5
           p.vy = (dy / len) * 0.5
