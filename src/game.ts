@@ -1,3 +1,4 @@
+import * as PIXI from 'pixi.js'
 import { Application, Container } from 'pixi.js'
 import { Cell } from './cell'
 import { Connector } from './connector'
@@ -61,10 +62,35 @@ export function createGame(app: Application) {
   let receptorOwner = cell1
   // factoryOwner is omitted — factory is cosmetic, always anchored to cell1 area
 
+  // Division preview state
+  let divisionTarget: Cell | null = null
+
+  const divisionGraphics = new PIXI.Graphics()
+  worldContainer.addChild(divisionGraphics)
+
   // Camera state: world-space position the camera is looking at.
   const cameraPos = { x: 0, y: 0 }
   const cameraVel = { x: 0, y: 0 }
   let elapsedFrames = 0
+
+  function drawSplitPreview(g: PIXI.Graphics, cell: Cell, mouseWorld: { x: number; y: number }): void {
+    const center = cell.getCenter()
+    const dx = mouseWorld.x - center.x
+    const dy = mouseWorld.y - center.y
+    const len = Math.sqrt(dx * dx + dy * dy) || 1
+    // Split axis is perpendicular to the mouse direction
+    const ax = -dy / len
+    const ay =  dx / len
+
+    // Pulsing dotted line — small squares at intervals along the axis
+    const alpha = 0.65 + Math.sin(Date.now() / 150) * 0.25
+    g.setFillStyle({ color: 0xccffee, alpha })
+    const DASH = 5, GAP = 5
+    for (let d = -120; d <= 120; d += DASH + GAP) {
+      g.rect(center.x + ax * d - 2, center.y + ay * d - 2, 4, 4)
+    }
+    g.fill()
+  }
 
   app.ticker.add(() => {
     elapsedFrames++
@@ -115,6 +141,31 @@ export function createGame(app: Application) {
 
     // Nutrient physics + respawn + draw — runs last so receptor ingestion is applied first.
     nutrientPool.update(cell1)
+
+    // Mouse in world space
+    const mouseWorld = {
+      x: mouse.screenX - worldContainer.x,
+      y: mouse.screenY - worldContainer.y,
+    }
+
+    // Division preview
+    const spaceReleased = input.wasSpaceReleased()
+    divisionGraphics.clear()
+
+    if (input.isSpaceHeld()) {
+      const hoveredCell = cells.find(c => c.isHovered()) ?? null
+      if (hoveredCell) {
+        divisionTarget = hoveredCell
+        drawSplitPreview(divisionGraphics, hoveredCell, mouseWorld)
+      } else {
+        divisionTarget = null  // cancelled — mouse moved off cell
+      }
+    } else {
+      if (spaceReleased && divisionTarget) {
+        // executeDiv will be added in Task 6
+      }
+      divisionTarget = null
+    }
 
     // Off-screen indicator: show arrow + distance when the cluster is out of view.
     const clusterPos = {
