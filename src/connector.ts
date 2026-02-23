@@ -29,9 +29,9 @@ export class Connector {
 
   constructor(stage: PIXI.Container, cell1: Cell, cell2: Cell) {
     // Connector height H = 2R·sin(π·(N-1)/vc). Target H ≈ 0.5R (25% of diameter).
-    // Cell gap is set to H/4 in game.ts, giving a 4:1 height-to-width aspect ratio.
+    // Minimum 4 so the connector is never a hairline-thin sliver at low vertex counts.
     const vc = cell1.getVertexCount()
-    this.n = Math.max(2, Math.round(vc / Math.PI * Math.asin(0.25)))
+    this.n = Math.max(4, Math.round(vc / Math.PI * Math.asin(0.25)))
 
     // Direction from cell1 toward cell2 — used so interface vertices always face each other
     // regardless of the cells' positions (critical for connectors created after division).
@@ -290,25 +290,38 @@ function roundedPoly(g: PIXI.Graphics, pts: number[], radius: number) {
   g.closePath()
 }
 
-// Returns n vertex indices on `cell` most facing `direction`, sorted by projection
-// onto `sortAxis` (the shared perpendicular to the connector axis). Using the same
-// sortAxis for both columns guarantees vertex i on one side matches vertex i on the
-// other — preventing the twisted / X-shaped connector.
-function selectInterfaceVertices(cell: Cell, direction: Vec2, sortAxis: Vec2, n: number): number[] {
+// Returns n vertex indices forming a contiguous arc on `cell` centred on the vertex
+// most facing `facing`, sorted by projection onto `sortAxis`.
+//
+// Using a contiguous arc (rather than "top-n by dot product") eliminates corner
+// jitter: on a convex ring the sortAxis projection is monotone along any arc shorter
+// than a half-circle, so the sorted order never flips between frames even when two
+// adjacent vertices have nearly equal dot products.
+function selectInterfaceVertices(cell: Cell, facing: Vec2, sortAxis: Vec2, n: number): number[] {
   const center = cell.getCenter()
-  const count = cell.getVertexCount()
+  const count  = cell.getVertexCount()
 
-  const scored: { index: number; dot: number; sortProj: number }[] = []
+  // Find the single vertex most facing `facing` — stable centre of the arc.
+  let bestDot = -Infinity, bestIdx = 0
   for (let i = 0; i < count; i++) {
-    const p = cell.getVertexPosition(i)
-    const dot      = (p.x - center.x) * direction.x + (p.y - center.y) * direction.y
-    const sortProj = (p.x - center.x) * sortAxis.x  + (p.y - center.y) * sortAxis.y
-    scored.push({ index: i, dot, sortProj })
+    const p   = cell.getVertexPosition(i)
+    const dot = (p.x - center.x) * facing.x + (p.y - center.y) * facing.y
+    if (dot > bestDot) { bestDot = dot; bestIdx = i }
   }
 
-  scored.sort((a, b) => b.dot - a.dot)
-  const top = scored.slice(0, n)
-  top.sort((a, b) => a.sortProj - b.sortProj)
+  // Collect n consecutive ring neighbours centred on bestIdx.
+  const half = Math.floor(n / 2)
+  const indices: number[] = []
+  for (let j = -half; j < n - half; j++) {
+    indices.push((bestIdx + j + count) % count)
+  }
 
-  return top.map(s => s.index)
+  // Sort by sortAxis projection for consistent top→bottom ordering on both columns.
+  const scored = indices.map(idx => {
+    const p  = cell.getVertexPosition(idx)
+    const sp = (p.x - center.x) * sortAxis.x + (p.y - center.y) * sortAxis.y
+    return { idx, sp }
+  })
+  scored.sort((a, b) => a.sp - b.sp)
+  return scored.map(s => s.idx)
 }
