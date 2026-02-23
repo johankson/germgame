@@ -42,12 +42,15 @@ export class Connector {
     const dlen = Math.sqrt(ddx * ddx + ddy * ddy) || 1
     const toward2: Vec2 = { x: ddx / dlen, y: ddy / dlen }
     const toward1: Vec2 = { x: -toward2.x, y: -toward2.y }
+    // Perpendicular to the connector axis — both columns sort along this shared axis
+    // so vertex i on the left always corresponds to vertex i on the right (no twist).
+    const sortAxis: Vec2 = { x: -toward2.y, y: toward2.x }
 
-    const all1 = selectInterfaceVertices(cell1, toward2, this.n)
+    const all1 = selectInterfaceVertices(cell1, toward2, sortAxis, this.n)
     this.cell1Indices = [all1[0], all1[this.n - 1]]
     this.cell1AllIndices = all1
 
-    const all2 = selectInterfaceVertices(cell2, toward1, this.n)
+    const all2 = selectInterfaceVertices(cell2, toward1, sortAxis, this.n)
     this.cell2Indices = [all2[0], all2[this.n - 1]]
     this.cell2AllIndices = all2
 
@@ -283,21 +286,25 @@ function roundedPoly(g: PIXI.Graphics, pts: number[], radius: number) {
   g.closePath()
 }
 
-// Returns n vertex indices on `cell` most facing `direction`, sorted top-to-bottom by y.
-function selectInterfaceVertices(cell: Cell, direction: Vec2, n: number): number[] {
+// Returns n vertex indices on `cell` most facing `direction`, sorted by projection
+// onto `sortAxis` (the shared perpendicular to the connector axis). Using the same
+// sortAxis for both columns guarantees vertex i on one side matches vertex i on the
+// other — preventing the twisted / X-shaped connector.
+function selectInterfaceVertices(cell: Cell, direction: Vec2, sortAxis: Vec2, n: number): number[] {
   const center = cell.getCenter()
   const count = cell.getVertexCount()
 
-  const scored: { index: number; dot: number; y: number }[] = []
+  const scored: { index: number; dot: number; sortProj: number }[] = []
   for (let i = 0; i < count; i++) {
     const p = cell.getVertexPosition(i)
-    const dot = (p.x - center.x) * direction.x + (p.y - center.y) * direction.y
-    scored.push({ index: i, dot, y: p.y })
+    const dot      = (p.x - center.x) * direction.x + (p.y - center.y) * direction.y
+    const sortProj = (p.x - center.x) * sortAxis.x  + (p.y - center.y) * sortAxis.y
+    scored.push({ index: i, dot, sortProj })
   }
 
   scored.sort((a, b) => b.dot - a.dot)
   const top = scored.slice(0, n)
-  top.sort((a, b) => a.y - b.y)
+  top.sort((a, b) => a.sortProj - b.sortProj)
 
   return top.map(s => s.index)
 }
