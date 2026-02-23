@@ -34,6 +34,7 @@ export function createGame(app: Application) {
   const cell2 = new Cell(worldContainer,  105, 0, vertexCount)
 
   const connector  = new Connector(worldContainer, cell1, cell2)
+  const connectors: Array<{ c: Connector; a: Cell; b: Cell }> = [{ c: connector, a: cell1, b: cell2 }]
 
   // Furnace (Mitochondrion) replaces the old triangle factory.
   // Square factory (ribosome) is kept.
@@ -126,6 +127,9 @@ export function createGame(app: Application) {
     )
     cells.push(newCell)
 
+    // Connect daughter to its parent cell
+    connectors.push({ c: new Connector(worldContainer, cell, newCell), a: cell, b: newCell })
+
     // Outward velocity impulse so the daughter drifts away
     const IMPULSE = 2.0
     for (let i = 0; i < vertexCount; i++) {
@@ -186,8 +190,8 @@ export function createGame(app: Application) {
       }
     }
 
-    // Connector runs first: injects attachment forces into cells before they integrate.
-    connector.update(cell1, cell2)
+    // Connectors run first: inject attachment forces into cells before they integrate.
+    for (const { c, a, b } of connectors) c.update(a, b)
     for (const cell of cells) cell.update()
 
     // Organelles and nutrient pipeline — run after cells so positions are current.
