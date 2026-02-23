@@ -40,16 +40,34 @@ export function createGame(app: Application) {
   const squareFactory = new Factory(worldContainer, 'square', 0x44aaff, -1)
 
   // Receptor is drawn on top of everything world-side so it's always visible.
-  const receptor = new Receptor(worldContainer, cell1)
+  let receptor = new Receptor(worldContainer, cell1)
 
   const hud   = new Hud(hudContainer)
   const input = new Input()
 
+  // Screen-space mouse position — updated on mousemove
+  const mouse = { screenX: 0, screenY: 0 }
+  app.canvas.addEventListener('mousemove', (e: MouseEvent) => {
+    const rect = (app.canvas as HTMLCanvasElement).getBoundingClientRect()
+    mouse.screenX = e.clientX - rect.left
+    mouse.screenY = e.clientY - rect.top
+  })
+
+  // Tracks all live cells for update/draw
+  const cells: Cell[] = [cell1, cell2]
+
+  // Which cell each organelle currently belongs to
+  let furnaceOwner = cell1
+  let receptorOwner = cell1
+  // factoryOwner is omitted — factory is cosmetic, always anchored to cell1 area
+
   // Camera state: world-space position the camera is looking at.
   const cameraPos = { x: 0, y: 0 }
   const cameraVel = { x: 0, y: 0 }
+  let elapsedFrames = 0
 
   app.ticker.add(() => {
+    elapsedFrames++
     // Arrow keys accelerate the camera; friction decelerates it when released.
     const dir = input.direction()
     cameraVel.x = (cameraVel.x + dir.x * CAMERA_ACCEL) * CAMERA_FRICTION
@@ -85,16 +103,15 @@ export function createGame(app: Application) {
 
     // Connector runs first: injects attachment forces into cells before they integrate.
     connector.update(cell1, cell2)
-    cell1.update()
-    cell2.update()
+    for (const cell of cells) cell.update()
 
     // Organelles and nutrient pipeline — run after cells so positions are current.
-    const cellCenter  = cell1.getCenter()
-    const attachPoint = connector.getCell1AttachPoint(cell1)
+    const furnaceCenter  = furnaceOwner.getCenter()
+    const attachPoint    = connector.getCell1AttachPoint(cell1)  // stays on cell1 (cosmetic)
 
-    furnace.update({ x: cellCenter.x, y: cellCenter.y - 20 }, cell1, nutrientPool)
-    squareFactory.update({ x: cellCenter.x, y: cellCenter.y + 20 }, attachPoint)
-    receptor.update(cell1, nutrientPool)
+    furnace.update({ x: furnaceCenter.x, y: furnaceCenter.y - 20 }, furnaceOwner, nutrientPool)
+    squareFactory.update({ x: furnaceCenter.x, y: furnaceCenter.y + 20 }, attachPoint)
+    receptor.update(receptorOwner, nutrientPool)
 
     // Nutrient physics + respawn + draw — runs last so receptor ingestion is applied first.
     nutrientPool.update(cell1)
@@ -104,6 +121,11 @@ export function createGame(app: Application) {
       x: (cell1.getCenter().x + cell2.getCenter().x) / 2,
       y: (cell1.getCenter().y + cell2.getCenter().y) / 2,
     }
-    hud.update(clusterPos, cameraPos, app.screen.width, app.screen.height)
+    hud.update(clusterPos, cameraPos, app.screen.width, app.screen.height, {
+      elapsedFrames,
+      energy: cell1.energy,
+      maxEnergy: cell1.maxEnergy,
+      consumed: furnace.getConsumed(),
+    })
   })
 }
