@@ -23,8 +23,7 @@ export class Connector {
   // All N interface indices are stored so draw() can read the full arc from the cell.
   private cell1Indices: [number, number]  // [topInterface, bottomInterface] — physics
   private cell2Indices: [number, number]
-  private cell1AllIndices: number[]       // all N indices, top→bottom — rendering
-  private cell2AllIndices: number[]
+  private cell1AllIndices: number[]       // all N indices — used by getCell1AttachPoint
   private graphics: PIXI.Graphics
   private hovered = false
 
@@ -52,7 +51,6 @@ export class Connector {
 
     const all2 = selectInterfaceVertices(cell2, toward1, sortAxis, this.n)
     this.cell2Indices = [all2[0], all2[this.n - 1]]
-    this.cell2AllIndices = all2
 
     // Endpoints start at their cell attachment positions; intermediate vertices are
     // interpolated along the straight line between them — the natural rest state.
@@ -232,13 +230,19 @@ export class Connector {
     // so the connector visibly overlaps the cell surfaces and is always clickable.
     const EXTEND = 8
 
+    // Recompute facing vertices each frame so the connector is never twisted,
+    // regardless of when it was created or how much the cells have rotated.
+    const sortAxis: Vec2 = { x: -ay, y: ax }
+    const face1 = selectInterfaceVertices(cell1, { x: ax, y: ay }, sortAxis, this.n)
+    const face2 = selectInterfaceVertices(cell2, { x: -ax, y: -ay }, sortAxis, this.n)
+
     const points: number[] = []
-    for (const idx of this.cell1AllIndices) {
+    for (const idx of face1) {
       const p = cell1.getSmoothedVertexPosition(idx)
       points.push(p.x - ax * EXTEND, p.y - ay * EXTEND)
     }
-    for (let i = this.cell2AllIndices.length - 1; i >= 0; i--) {
-      const p = cell2.getSmoothedVertexPosition(this.cell2AllIndices[i])
+    for (let i = face2.length - 1; i >= 0; i--) {
+      const p = cell2.getSmoothedVertexPosition(face2[i])
       points.push(p.x + ax * EXTEND, p.y + ay * EXTEND)
     }
 

@@ -35,6 +35,8 @@ export function createGame(app: Application) {
 
   const connector  = new Connector(worldContainer, cell1, cell2)
   const connectors: Array<{ c: Connector; a: Cell; b: Cell }> = [{ c: connector, a: cell1, b: cell2 }]
+  // Connectors for newly divided cells are deferred until the daughter has separated.
+  const pendingConnectors: Array<{ a: Cell; b: Cell; framesLeft: number }> = []
 
   // Furnace (Mitochondrion) replaces the old triangle factory.
   // Square factory (ribosome) is kept.
@@ -127,8 +129,9 @@ export function createGame(app: Application) {
     )
     cells.push(newCell)
 
-    // Connect daughter to its parent cell
-    connectors.push({ c: new Connector(worldContainer, cell, newCell), a: cell, b: newCell })
+    // Defer connector creation: daughter starts inside the parent at radius 50,
+    // so vertex selection is wrong if we create it now. Wait 30 frames for separation.
+    pendingConnectors.push({ a: cell, b: newCell, framesLeft: 30 })
 
     // Outward velocity impulse so the daughter drifts away
     const IMPULSE = 2.0
@@ -187,6 +190,15 @@ export function createGame(app: Application) {
             cb.applyExternalForce(i,  nx * f / vc,  ny * f / vc)
           }
         }
+      }
+    }
+
+    // Promote deferred connectors once the daughter has had time to separate.
+    for (let i = pendingConnectors.length - 1; i >= 0; i--) {
+      const p = pendingConnectors[i]
+      if (--p.framesLeft <= 0) {
+        connectors.push({ c: new Connector(worldContainer, p.a, p.b), a: p.a, b: p.b })
+        pendingConnectors.splice(i, 1)
       }
     }
 
