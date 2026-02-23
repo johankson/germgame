@@ -34,11 +34,20 @@ export class Connector {
     const vc = cell1.getVertexCount()
     this.n = Math.max(2, Math.round(vc / Math.PI * Math.asin(0.25)))
 
-    const all1 = selectInterfaceVertices(cell1, { x: 1, y: 0 }, this.n)
+    // Direction from cell1 toward cell2 — used so interface vertices always face each other
+    // regardless of the cells' positions (critical for connectors created after division).
+    const c1 = cell1.getCenter()
+    const c2 = cell2.getCenter()
+    const ddx = c2.x - c1.x, ddy = c2.y - c1.y
+    const dlen = Math.sqrt(ddx * ddx + ddy * ddy) || 1
+    const toward2: Vec2 = { x: ddx / dlen, y: ddy / dlen }
+    const toward1: Vec2 = { x: -toward2.x, y: -toward2.y }
+
+    const all1 = selectInterfaceVertices(cell1, toward2, this.n)
     this.cell1Indices = [all1[0], all1[this.n - 1]]
     this.cell1AllIndices = all1
 
-    const all2 = selectInterfaceVertices(cell2, { x: -1, y: 0 }, this.n)
+    const all2 = selectInterfaceVertices(cell2, toward1, this.n)
     this.cell2Indices = [all2[0], all2[this.n - 1]]
     this.cell2AllIndices = all2
 
