@@ -92,6 +92,60 @@ export function createGame(app: Application) {
     g.fill()
   }
 
+
+  let flashFrames = 0
+  let flashAxis: { cx: number; cy: number; ax: number; ay: number } | null = null
+
+  function executeDiv(cell: Cell, mouseWorld: { x: number; y: number }): void {
+    const center = cell.getCenter()
+    const dx = mouseWorld.x - center.x
+    const dy = mouseWorld.y - center.y
+    const len = Math.sqrt(dx * dx + dy * dy) || 1
+    const mdx = dx / len   // unit vector pointing toward mouse (new-cell side)
+    const mdy = dy / len
+
+    // Helper: is a world-space point on the "new cell" (mouse) side of the split?
+    const onNewSide = (px: number, py: number) =>
+      (px - center.x) * mdx + (py - center.y) * mdy > 0
+
+    // Organelle positions as used in the ticker (fixed offsets from cell center)
+    const furnacePos  = { x: center.x, y: center.y - 20 }
+    const receptorPos = receptor.getVertexPosition(receptorOwner)
+
+    const furnaceTransfers  = furnaceOwner === cell  && onNewSide(furnacePos.x,  furnacePos.y)
+    const receptorTransfers = receptorOwner === cell && onNewSide(receptorPos.x, receptorPos.y)
+
+    // Spawn daughter at same centre, 50% radius, slightly offset toward mouse
+    const OFFSET = 18
+    const newCell = new Cell(
+      worldContainer,
+      center.x + mdx * OFFSET,
+      center.y + mdy * OFFSET,
+      vertexCount,
+      50,
+    )
+    cells.push(newCell)
+
+    // Outward velocity impulse so the daughter drifts away
+    const IMPULSE = 2.0
+    for (let i = 0; i < vertexCount; i++) {
+      newCell.applyExternalForce(i, mdx * IMPULSE, mdy * IMPULSE)
+    }
+
+    // Reassign organelles
+    if (furnaceTransfers)  furnaceOwner = newCell
+    if (receptorTransfers) {
+      receptor.destroy()
+      receptor      = new Receptor(worldContainer, newCell)
+      receptorOwner = newCell
+    }
+
+    // Store flash info for Task 7
+    flashFrames = 20
+    flashAxis   = { cx: center.x, cy: center.y, ax: -mdy, ay: mdx }
+    void flashFrames; void flashAxis  // consumed in Task 7
+  }
+
   app.ticker.add(() => {
     elapsedFrames++
     // Arrow keys accelerate the camera; friction decelerates it when released.
@@ -162,7 +216,7 @@ export function createGame(app: Application) {
       }
     } else {
       if (spaceReleased && divisionTarget) {
-        // executeDiv will be added in Task 6
+        executeDiv(divisionTarget, mouseWorld)
       }
       divisionTarget = null
     }
