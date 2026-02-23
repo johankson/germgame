@@ -26,6 +26,8 @@ export class Cell {
 
   constructor(stage: PIXI.Container, cx: number, cy: number, vertexCount = 32, initialRadius = RING_RADIUS) {
     this.vertexCount = vertexCount
+    // restEdgeLength and restRadii always target RING_RADIUS so cells spawned at a
+    // smaller initialRadius naturally inflate back to full size via spring forces.
     this.restEdgeLength = (2 * Math.PI * RING_RADIUS) / vertexCount
     this.positions = []
     this.velocities = []
