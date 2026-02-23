@@ -24,7 +24,7 @@ export class Cell {
   energy    = 0
   readonly maxEnergy = 8
 
-  constructor(stage: PIXI.Container, cx: number, cy: number, vertexCount = 32) {
+  constructor(stage: PIXI.Container, cx: number, cy: number, vertexCount = 32, initialRadius = RING_RADIUS) {
     this.vertexCount = vertexCount
     this.restEdgeLength = (2 * Math.PI * RING_RADIUS) / vertexCount
     this.positions = []
@@ -49,8 +49,8 @@ export class Cell {
     for (let i = 0; i < vertexCount; i++) {
       const angle = (i / vertexCount) * Math.PI * 2
       this.positions.push({
-        x: cx + Math.cos(angle) * RING_RADIUS,
-        y: cy + Math.sin(angle) * RING_RADIUS,
+        x: cx + Math.cos(angle) * initialRadius,
+        y: cy + Math.sin(angle) * initialRadius,
       })
       this.velocities.push({ x: 0, y: 0 })
       this.pendingExternalForces.push({ x: 0, y: 0 })
@@ -65,6 +65,8 @@ export class Cell {
   }
 
   getVertexCount(): number { return this.vertexCount }
+
+  isHovered(): boolean { return this.hovered }
 
   getVertexPosition(i: number): Vec2 {
     return { x: this.positions[i].x, y: this.positions[i].y }
