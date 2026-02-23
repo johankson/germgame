@@ -143,7 +143,6 @@ export function createGame(app: Application) {
     // Store flash info for Task 7
     flashFrames = 20
     flashAxis   = { cx: center.x, cy: center.y, ax: -mdy, ay: mdx }
-    void flashFrames; void flashAxis  // consumed in Task 7
   }
 
   app.ticker.add(() => {
@@ -205,6 +204,16 @@ export function createGame(app: Application) {
     // Division preview
     const spaceReleased = input.wasSpaceReleased()
     divisionGraphics.clear()
+
+    // Split flash — brief bright line at the division point, fades over ~20 frames
+    if (flashFrames > 0 && flashAxis) {
+      const t = flashFrames / 20   // 1.0 → 0.0 as it fades
+      divisionGraphics.setStrokeStyle({ width: 2 + t * 2, color: 0xffffff, alpha: t * 0.9 })
+      divisionGraphics.moveTo(flashAxis.cx + flashAxis.ax * -120, flashAxis.cy + flashAxis.ay * -120)
+      divisionGraphics.lineTo(flashAxis.cx + flashAxis.ax *  120, flashAxis.cy + flashAxis.ay *  120)
+      divisionGraphics.stroke()
+      flashFrames--
+    }
 
     if (input.isSpaceHeld()) {
       const hoveredCell = cells.find(c => c.isHovered()) ?? null
