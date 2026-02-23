@@ -2,8 +2,11 @@ import { Application, Container } from 'pixi.js'
 import { Cell } from './cell'
 import { Connector } from './connector'
 import { Factory } from './factory'
+import { Furnace } from './furnace'
 import { Hud } from './hud'
 import { Input } from './input'
+import { NutrientPool } from './nutrients'
+import { Receptor } from './receptor'
 
 const CAMERA_ACCEL    = 1.0   // px/frame added each frame while key held
 const CAMERA_FRICTION = 0.90  // velocity multiplier per frame — controls deceleration feel
@@ -21,13 +24,23 @@ export function createGame(app: Application) {
   const hudContainer = new Container()
   app.stage.addChild(hudContainer)
 
+  // Nutrients are added first so they render under the (translucent) cells.
+  // Inside nutrients are then visible as dim shapes through the membrane.
+  const nutrientPool = new NutrientPool(worldContainer)
+
   // Cells spawn at world origin — the camera starts centred there.
   const cell1 = new Cell(worldContainer, -105, 0, vertexCount)
   const cell2 = new Cell(worldContainer,  105, 0, vertexCount)
 
-  const connector       = new Connector(worldContainer, cell1, cell2)
-  const triangleFactory = new Factory(worldContainer, 'triangle', 0xff5533,  1)
-  const squareFactory   = new Factory(worldContainer, 'square',   0x44aaff, -1)
+  const connector  = new Connector(worldContainer, cell1, cell2)
+
+  // Furnace (Mitochondrion) replaces the old triangle factory.
+  // Square factory (ribosome) is kept.
+  const furnace       = new Furnace(worldContainer)
+  const squareFactory = new Factory(worldContainer, 'square', 0x44aaff, -1)
+
+  // Receptor is drawn on top of everything world-side so it's always visible.
+  const receptor = new Receptor(worldContainer, cell1)
 
   const hud   = new Hud(hudContainer)
   const input = new Input()
@@ -75,11 +88,16 @@ export function createGame(app: Application) {
     cell1.update()
     cell2.update()
 
-    // Factories: drawn last so they sit on top of everything.
+    // Organelles and nutrient pipeline — run after cells so positions are current.
     const cellCenter  = cell1.getCenter()
     const attachPoint = connector.getCell1AttachPoint(cell1)
-    triangleFactory.update({ x: cellCenter.x, y: cellCenter.y - 20 }, attachPoint)
-    squareFactory.update(  { x: cellCenter.x, y: cellCenter.y + 20 }, attachPoint)
+
+    furnace.update({ x: cellCenter.x, y: cellCenter.y - 20 }, cell1, nutrientPool)
+    squareFactory.update({ x: cellCenter.x, y: cellCenter.y + 20 }, attachPoint)
+    receptor.update(cell1, nutrientPool)
+
+    // Nutrient physics + respawn + draw — runs last so receptor ingestion is applied first.
+    nutrientPool.update(cell1)
 
     // Off-screen indicator: show arrow + distance when the cluster is out of view.
     const clusterPos = {

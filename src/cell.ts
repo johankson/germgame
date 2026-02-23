@@ -21,6 +21,9 @@ export class Cell {
   private readonly vertexCount: number
   private readonly restEdgeLength: number
 
+  energy    = 0
+  readonly maxEnergy = 8
+
   constructor(stage: PIXI.Container, cx: number, cy: number, vertexCount = 32) {
     this.vertexCount = vertexCount
     this.restEdgeLength = (2 * Math.PI * RING_RADIUS) / vertexCount
@@ -101,6 +104,29 @@ export class Cell {
       y += p.y
     }
     return { x: x / this.vertexCount, y: y / this.vertexCount }
+  }
+
+  addEnergy(amount: number): void {
+    this.energy = Math.min(this.maxEnergy, this.energy + amount)
+  }
+
+  isAtMaxEnergy(): boolean {
+    return this.energy >= this.maxEnergy
+  }
+
+  // Ray-cast point-in-polygon test against the raw vertex ring.
+  containsPoint(p: Vec2): boolean {
+    const n = this.vertexCount
+    let inside = false
+    for (let i = 0, j = n - 1; i < n; j = i++) {
+      const xi = this.positions[i].x, yi = this.positions[i].y
+      const xj = this.positions[j].x, yj = this.positions[j].y
+      if (((yi > p.y) !== (yj > p.y)) &&
+          (p.x < (xj - xi) * (p.y - yi) / (yj - yi) + xi)) {
+        inside = !inside
+      }
+    }
+    return inside
   }
 
   applyMovement(dir: Vec2) {
@@ -253,6 +279,26 @@ export class Cell {
     g.circle(center.x, center.y, RING_RADIUS * 0.28)
     g.fill()
     g.stroke()
+
+    // Energy arc — a partial ring just outside the nucleus that fills clockwise from the top.
+    // beginPath() is required before each arc() in PixiJS v8: after stroke()/fill(), the engine
+    // calls _initNextPathLocation() which does moveTo(lastPoint). For circle shapes, lastPoint
+    // defaults to (0,0), causing a stray line from world-origin to the arc start.
+    const arcR = RING_RADIUS * 0.38
+    g.beginPath()
+    g.setStrokeStyle({ width: 3, color: 0x1a4a30, alpha: 0.55 })
+    g.arc(center.x, center.y, arcR, 0, Math.PI * 2)
+    g.stroke()
+    if (this.energy > 0) {
+      const fraction   = this.energy / this.maxEnergy
+      const startAngle = -Math.PI / 2
+      const endAngle   = startAngle + fraction * Math.PI * 2
+      const arcColor   = this.energy >= this.maxEnergy ? 0xffee44 : 0xffcc22
+      g.beginPath()
+      g.setStrokeStyle({ width: 3, color: arcColor, alpha: 0.9 })
+      g.arc(center.x, center.y, arcR, startAngle, endAngle)
+      g.stroke()
+    }
   }
 
 }
