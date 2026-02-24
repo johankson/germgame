@@ -1,6 +1,7 @@
 export class Input {
   readonly keys = { up: false, down: false, left: false, right: false, space: false }
   private spaceJustReleased = false
+  private fuseMode = false
 
   constructor() {
     window.addEventListener('keydown', e => this.setKey(e.key, true))
@@ -33,6 +34,8 @@ export class Input {
     return r
   }
 
+  isFuseMode(): boolean { return this.fuseMode }
+
   private setKey(key: string, val: boolean) {
     switch (key) {
       case 'ArrowUp':    this.keys.up    = val; break
@@ -42,6 +45,10 @@ export class Input {
       case ' ':
         this.keys.space = val
         if (!val) this.spaceJustReleased = true
+        break
+      case 'f':
+      case 'F':
+        if (val) this.fuseMode = !this.fuseMode
         break
     }
   }
