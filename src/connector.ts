@@ -40,7 +40,10 @@ export class Connector {
 
     // Don't draw when cells are too far apart to be touching
     const surfaceGap = dist - 2 * RING_RADIUS
-    if (surfaceGap > MAX_GAP) return
+    if (surfaceGap >= MAX_GAP) {
+      this.graphics.hitArea = null
+      return
+    }
 
     const ax = dx / dist   // unit axis cell1 → cell2
     const ay = dy / dist
