@@ -33,10 +33,14 @@ export function createGame(app: Application) {
   const cell1 = new Cell(worldContainer, -105, 0, vertexCount)
   const cell2 = new Cell(worldContainer,  105, 0, vertexCount)
 
-  const connector  = new Connector(worldContainer, cell1, cell2)
-  const connectors: Array<{ c: Connector; a: Cell; b: Cell }> = [{ c: connector, a: cell1, b: cell2 }]
-  // Connectors for newly divided cells are deferred until the daughter has separated.
-  const pendingConnectors: Array<{ a: Cell; b: Cell; framesLeft: number }> = []
+  const bonds: Array<{ c: Connector; a: Cell; b: Cell }> = []
+  // Add a bond between two cells unless one already exists for this pair.
+  function addBond(a: Cell, b: Cell) {
+    if (bonds.some(bond => (bond.a === a && bond.b === b) || (bond.a === b && bond.b === a))) return
+    bonds.push({ c: new Connector(worldContainer), a, b })
+  }
+  // cell1 and cell2 start bonded at game creation
+  addBond(cell1, cell2)
 
   // Furnace (Mitochondrion) replaces the old triangle factory.
   // Square factory (ribosome) is kept.
@@ -129,9 +133,8 @@ export function createGame(app: Application) {
     )
     cells.push(newCell)
 
-    // Defer connector creation: daughter starts inside the parent at radius 50,
-    // so vertex selection is wrong if we create it now. Wait 30 frames for separation.
-    pendingConnectors.push({ a: cell, b: newCell, framesLeft: 30 })
+    // Bond parent and daughter immediately — bridge is purely visual so no deferral needed
+    addBond(cell, newCell)
 
     // Outward velocity impulse so the daughter drifts away
     const IMPULSE = 2.0
@@ -169,7 +172,7 @@ export function createGame(app: Application) {
     // Mirrors the repulsion loop below — same pattern, opposite sign.
     const LINK_K    = 0.3   // spring stiffness
     const LINK_REST = 220   // px centre-to-centre — natural resting gap
-    for (const { a, b } of connectors) {
+    for (const { a, b } of bonds) {
       const ca = a.getCenter()
       const cb = b.getCenter()
       const dx = cb.x - ca.x
@@ -215,22 +218,29 @@ export function createGame(app: Application) {
       }
     }
 
-    // Promote deferred connectors once the daughter has had time to separate.
-    for (let i = pendingConnectors.length - 1; i >= 0; i--) {
-      const p = pendingConnectors[i]
-      if (--p.framesLeft <= 0) {
-        connectors.push({ c: new Connector(worldContainer, p.a, p.b), a: p.a, b: p.b })
-        pendingConnectors.splice(i, 1)
+    // Sticky mode: bond any pair of cells within touching range
+    if (input.isFuseMode()) {
+      for (let ci = 0; ci < cells.length; ci++) {
+        for (let cj = ci + 1; cj < cells.length; cj++) {
+          const ca = cells[ci].getCenter()
+          const cb = cells[cj].getCenter()
+          const dx = cb.x - ca.x, dy = cb.y - ca.y
+          if (Math.sqrt(dx * dx + dy * dy) < 220) addBond(cells[ci], cells[cj])
+        }
       }
     }
 
-    // Connectors run first: inject attachment forces into cells before they integrate.
-    for (const { c, a, b } of connectors) c.update(a, b)
+    // Draw bonds (purely visual — no physics forces from Connector)
+    for (const { c, a, b } of bonds) c.update(a, b)
     for (const cell of cells) cell.update()
 
     // Organelles and nutrient pipeline — run after cells so positions are current.
     const furnaceCenter  = furnaceOwner.getCenter()
-    const attachPoint    = connector.getCell1AttachPoint(cell1)  // stays on cell1 (cosmetic)
+    // Cosmetic attach point: cell1 surface facing cell2 (pure visual, no Connector dependency)
+    const _bc1 = cell1.getCenter(), _bc2 = cell2.getCenter()
+    const _bdx = _bc2.x - _bc1.x,  _bdy = _bc2.y - _bc1.y
+    const _bdl = Math.sqrt(_bdx * _bdx + _bdy * _bdy) || 1
+    const attachPoint = { x: _bc1.x + (_bdx / _bdl) * 100, y: _bc1.y + (_bdy / _bdl) * 100 }
 
     furnace.update({ x: furnaceCenter.x, y: furnaceCenter.y - 20 }, furnaceOwner, nutrientPool)
     squareFactory.update({ x: furnaceCenter.x, y: furnaceCenter.y + 20 }, attachPoint)
@@ -284,6 +294,7 @@ export function createGame(app: Application) {
       energy: cell1.energy,
       maxEnergy: cell1.maxEnergy,
       consumed: furnace.getConsumed(),
+      fuseMode: input.isFuseMode(),
     })
   })
 }
