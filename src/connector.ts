@@ -50,9 +50,12 @@ export class Connector {
     const px = -ay         // perpendicular (90° CCW rotation)
     const py =  ax
 
-    // Points on each cell's surface facing the other cell
-    const t1x = c1.x + ax * RING_RADIUS,  t1y = c1.y + ay * RING_RADIUS
-    const t2x = c2.x - ax * RING_RADIUS,  t2y = c2.y - ay * RING_RADIUS
+    // Points on each cell's surface facing the other cell.
+    // Clamped to at most half the centre-to-centre distance so the points
+    // never cross when cells heavily overlap (which flips the rect into a spike).
+    const reach = Math.min(RING_RADIUS, dist / 2)
+    const t1x = c1.x + ax * reach,  t1y = c1.y + ay * reach
+    const t2x = c2.x - ax * reach,  t2y = c2.y - ay * reach
 
     const hw = HALF_WIDTH
     const points = [
