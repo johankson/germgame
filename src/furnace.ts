@@ -15,6 +15,9 @@ export class Furnace {
   private readonly graphics: PIXI.Graphics
   private pulseFrames  = 0   // countdown for consumption glow
   private cooldown     = CONSUME_COOLDOWN  // starts full so first nutrient has time to float
+  private totalConsumed = 0
+
+  getConsumed(): number { return this.totalConsumed }
 
   constructor(stage: PIXI.Container) {
     this.graphics = new PIXI.Graphics()
@@ -44,6 +47,7 @@ export class Furnace {
       if (closest !== null) {
         pool.particles.splice(closest.idx, 1)
         cell.addEnergy(1)
+        this.totalConsumed++
         this.pulseFrames = 35
       }
     }
